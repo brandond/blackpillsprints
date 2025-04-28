@@ -1,6 +1,6 @@
 # BlackPillSprints
 
-STM32F401 (aka "Black Pill") Arduino code for dual pulse counting with hall effect/TMR sensors.
+STM32F4X1 (aka ["Black Pill"](https://www.adafruit.com/product/4877)) Arduino code for dual pulse counting with hall effect/TMR sensors.
 Uses hardware timers for counting, which in theory will reliably count beyond the rated switching speed of most sensors.
 Tested at up to 80kph (~15 ms/rotation).
 
