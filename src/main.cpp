@@ -103,7 +103,6 @@ void setup(){
 
   pinMode(PA0, INPUT_PULLUP); // onboard button
   pinMode(PC13, OUTPUT);      // onboard LED
-  digitalWrite(PC13, HIGH);   // LED off at startup
 
   // TIM2 counts player roller revolutions:
   // A on PA1 (AF01 TIM2_CH2)
@@ -142,13 +141,19 @@ void setup(){
 // low priority IO loop
 void loop(){
   // check for onboard button press - resets into DFU mode
-  if (digitalRead(PA0) == LOW){
+  if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == 0){
     bootloader();
   }
 
   // check for report interval tick
   if (Ticked) {
     Ticked = false;
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
+    // don't bother printing if the port isn't configured yet
+    if (! SerialUSB) {
+      return;
+    }
 
     // distance is rotations * roller diameter in meters
     float metersA = (float)RotationsA * 0.35908;
@@ -165,7 +170,5 @@ void loop(){
         RotationsA, metersA, millisA, speedA,
         RotationsB, metersB, millisB, speedB);
     SerialUSB.write(StringBuffer, len);
-
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   }
 }
