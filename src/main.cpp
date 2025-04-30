@@ -18,8 +18,9 @@ volatile bool OverflowB;
 
 volatile bool Ticked;
 volatile uint32_t Ticks;
+volatile uint32_t StartTime;
 
-const char* JSONFormat = "{\"a\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"},\"b\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"}}\n";
+const char* JSONFormat = "{\"time\":%u,\"a\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"},\"b\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"}}\n";
 char StringBuffer[512];
 
 // blink, dummy
@@ -59,6 +60,9 @@ void trigger_a_callback(){
   } else if (LastCaptureA != 0){
     IntervalA = currentCapture - LastCaptureA;
   }
+  if (StartTime == 0){
+    StartTime = HAL_GetTick();
+  }
   LastCaptureA = currentCapture;
   OverflowA = false;
   RotationsA++;
@@ -72,6 +76,9 @@ void trigger_b_callback(){
   } else if (LastCaptureB != 0){
     IntervalB = currentCapture - LastCaptureB;
   }
+  if (StartTime == 0){
+    StartTime = HAL_GetTick();
+  }
   LastCaptureB = currentCapture;
   OverflowB = false;
   RotationsB++;
@@ -79,6 +86,9 @@ void trigger_b_callback(){
 
 // Set overflow flags and reset stats if overflow has not been cleared by trigger since last overflow
 void overflow_callback(){
+  if (OverflowA && OverflowB){
+    StartTime = 0;
+  }
   if (OverflowA) {
     LastCaptureA = 0;
     RotationsA = 0;
@@ -157,11 +167,17 @@ void loop(){
       return;
     }
 
+    uint32_t elapsedTime = 0;
     float metersA, metersB, millisA, millisB, speedA, speedB = 0;
 
     // only output once per second if data is 0
     if ((RotationsA == 0) && (RotationsB == 0) && (Ticks % OUTPUT_INTERVAL_HERTZ != 0)){
       return;
+    }
+
+    // milliseconds since first event since counters were reset
+    if (StartTime != 0){
+      elapsedTime = HAL_GetTick() - StartTime;
     }
 
     if (RotationsA > 0) {
@@ -188,7 +204,7 @@ void loop(){
         RotationsB, metersB, millisB, speedB);
     */
 
-    int len = sprintf(StringBuffer, JSONFormat, metersA, speedA, metersB, speedB);
+    int len = sprintf(StringBuffer, JSONFormat, elapsedTime, metersA, speedA, metersB, speedB);
     SerialUSB.write(StringBuffer, len);
     HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   }
