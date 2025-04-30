@@ -1,6 +1,8 @@
 #include "Arduino.h"
 #include "stm32f4xx.h"
 
+#define OUTPUT_INTERVAL_HERTZ 20
+
 HardwareTimer *TimerP;
 HardwareTimer *TimerI;
 
@@ -17,6 +19,7 @@ volatile bool OverflowB;
 volatile bool Ticked;
 volatile uint32_t Ticks;
 
+const char* JSONFormat = "{\"a\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"},\"b\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"}}\n";
 char StringBuffer[512];
 
 // blink, dummy
@@ -119,7 +122,7 @@ void setup(){
 
   // TIM3 ticks, triggering report via USB serial at regular intervals
   TimerI = new HardwareTimer(TIM3);
-  TimerI->setOverflow(4, HERTZ_FORMAT);
+  TimerI->setOverflow(OUTPUT_INTERVAL_HERTZ, HERTZ_FORMAT);
   TimerI->attachInterrupt(interval_callback);
 
   // Set PA1 pin mode
@@ -148,27 +151,45 @@ void loop(){
   // check for report interval tick
   if (Ticked) {
     Ticked = false;
-    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 
     // don't bother printing if the port isn't configured yet
     if (! SerialUSB) {
       return;
     }
 
-    // distance is rotations * roller diameter in meters
-    float metersA = (float)RotationsA * 0.35908;
-    float metersB = (float)RotationsB * 0.35908;
-    // last revolution interval in millis, just divide by 1000 to convert from micros
-    float millisA = (float)IntervalA / 1000.0;
-    float millisB = (float)IntervalB / 1000.0;
-    // speed is distance over time - roller diameter in cm divided by revolution interval in millis, times 36 to get km/h
-    float speedA = (35.908 / millisA) * 36.0;
-    float speedB = (35.908 / millisB) * 36.0;
+    float metersA, metersB, millisA, millisB, speedA, speedB = 0;
 
+    // only output once per second if data is 0
+    if ((RotationsA == 0) && (RotationsB == 0) && (Ticks % OUTPUT_INTERVAL_HERTZ != 0)){
+      return;
+    }
+
+    if (RotationsA > 0) {
+      // distance is rotations * roller diameter in meters
+      metersA = (float)RotationsA * 0.35908;
+      // last revolution interval in millis, just divide by 1000 to convert from micros
+      millisA = (float)IntervalA / 1000.0;
+      // speed is distance over time - roller diameter in cm divided by revolution interval in millis, times 36 to get km/h
+      speedA = (35.908 / millisA) * 36.0;
+    }
+    if (RotationsB > 0) {
+      // distance is rotations * roller diameter in meters
+      metersB = (float)RotationsB * 0.35908;
+      // last revolution interval in millis, just divide by 1000 to convert from micros
+      millisB = (float)IntervalB / 1000.0;
+      // speed is distance over time - roller diameter in cm divided by revolution interval in millis, times 36 to get km/h
+      speedB = (35.908 / millisB) * 36.0;
+    }
+
+    /*
     int len = sprintf(StringBuffer, "%05u  A count=%05u dist=%07.2fm time=%07.2fms speed=%05.2fkph  B count=%05u dist=%07.2fm time=%07.2fms speed=%05.2fkph\n",
         Ticks,
         RotationsA, metersA, millisA, speedA,
         RotationsB, metersB, millisB, speedB);
+    */
+
+    int len = sprintf(StringBuffer, JSONFormat, metersA, speedA, metersB, speedB);
     SerialUSB.write(StringBuffer, len);
+    HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
   }
 }
