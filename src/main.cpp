@@ -171,7 +171,7 @@ void loop(){
     float metersA, metersB, millisA, millisB, speedA, speedB = 0;
 
     // only output once per second if data is 0
-    if ((RotationsA == 0) && (RotationsB == 0) && (Ticks % OUTPUT_INTERVAL_HERTZ != 0)){
+    if ((StartTime == 0) && (Ticks % OUTPUT_INTERVAL_HERTZ != 0)){
       return;
     }
 
@@ -180,7 +180,7 @@ void loop(){
       elapsedTime = HAL_GetTick() - StartTime;
     }
 
-    if (RotationsA > 0) {
+    if (IntervalA > 0) {
       // distance is rotations * roller diameter in meters
       metersA = (float)RotationsA * 0.35908;
       // last revolution interval in millis, just divide by 1000 to convert from micros
@@ -188,7 +188,7 @@ void loop(){
       // speed is distance over time - roller diameter in cm divided by revolution interval in millis, times 36 to get km/h
       speedA = (35.908 / millisA) * 36.0;
     }
-    if (RotationsB > 0) {
+    if (IntervalB > 0) {
       // distance is rotations * roller diameter in meters
       metersB = (float)RotationsB * 0.35908;
       // last revolution interval in millis, just divide by 1000 to convert from micros
