@@ -20,7 +20,12 @@ volatile bool Ticked;
 volatile uint32_t Ticks;
 volatile uint32_t StartTime;
 
+volatile bool Simulate;
+volatile uint32_t SimA;
+volatile uint32_t SimB;
+
 const char* JSONFormat = "{\"time\":%u,\"a\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"},\"b\":{\"distance\":\"%.2f\",\"speed\":\"%.2f\"}}\n";
+
 char StringBuffer[512];
 
 // blink, dummy
@@ -151,11 +156,77 @@ void setup(){
   TimerI->resume();
 }
 
+// Reset stats and toggle between sim and hardware timers
+void toggleSim(){
+  RotationsA = 0;
+  IntervalA = 0;
+  OverflowA = false;
+  RotationsB = 0;
+  IntervalB = 0;
+  OverflowB = false;
+
+  if (Simulate){
+    Simulate = false;
+    StartTime = 0;
+    LastCaptureA = 0;
+    LastCaptureB = 0;
+    TimerP->resumeChannel(2);
+    TimerP->resumeChannel(3);
+  } else {
+    TimerP->pause();
+    Simulate = true;
+    StartTime = HAL_GetTick();
+    randomSeed(StartTime);
+    LastCaptureA = StartTime;
+    LastCaptureB = StartTime;
+    SimA = StartTime + random(400, 501);
+    SimB = StartTime + random(400, 501);
+  }
+}
+
+// calculate change vs current interval time for next interval
+inline int32_t deltaOffset(uint32_t delta){
+    if (delta > 100) { // way too slow, wait a lot less next time
+      return random(-100,-24);
+    } else if (delta > 25) { // too slow, wait less next time
+      return random(-5,3);
+    } else if (delta < 15) { // too fast, wait more next time
+      return random(-2,6);
+    } else { // just jitter a bit
+      return random(-1,2);
+    }
+}
+
+// advance state one tick
+void stepSim(){
+  uint32_t curTime = HAL_GetTick();
+  uint32_t delta;
+  if (curTime >= SimA) {
+    delta = curTime - LastCaptureA;
+    IntervalA = delta * 1000;
+    SimA += delta + deltaOffset(delta);
+    LastCaptureA = curTime;
+    RotationsA++;
+  }
+  if (curTime >= SimB) {
+    delta = curTime - LastCaptureB;
+    IntervalB = delta * 1000;
+    SimB += delta + deltaOffset(delta);
+    LastCaptureB = curTime;
+    RotationsB++;
+  }
+}
+
 // low priority IO loop
 void loop(){
-  // check for onboard button press - resets into DFU mode
+  // check for onboard button press - toggles sim state
   if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == 0){
-    bootloader();
+    toggleSim();
+  }
+
+  // advance state one tick if sim is active
+  if (Simulate){
+    stepSim();
   }
 
   // check for report interval tick
@@ -198,8 +269,8 @@ void loop(){
     }
 
     /*
-    int len = sprintf(StringBuffer, "%05u  A count=%05u dist=%07.2fm time=%07.2fms speed=%05.2fkph  B count=%05u dist=%07.2fm time=%07.2fms speed=%05.2fkph\n",
-        Ticks,
+    int len = sprintf(StringBuffer, "%05u  %07u  A count=%05u dist=%07.2fm time=%07.2fms speed=%05.2fkph  B count=%05u dist=%07.2fm time=%07.2fms speed=%05.2fkph\n",
+        Ticks, elapsedTime,
         RotationsA, metersA, millisA, speedA,
         RotationsB, metersB, millisB, speedB);
     */
